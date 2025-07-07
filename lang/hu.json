@@ -1,0 +1,10 @@
+{
+    "config_section_missing": "Hiba: A 'config.ini' fájlból hiányzik a [commands] szekció.",
+    "config_read_error": "Hiba a konfigurációs fájl olvasása közben: {}",
+    "usage": "Használat: python3 main.py <parancs>",
+    "available_commands": "\nElérhető parancsok:",
+    "unknown_command": "Hiba: Ismeretlen parancs: '{}'",
+    "module_missing_run_function": "Hiba: A(z) '{}' modulban nem található futtatható 'run' függvény.",
+    "import_error": "Hiba: Nem sikerült betölteni a modult: '{}'. Ellenőrizd a 'config.ini' fájlt és az elérési utat.",
+    "module_run_error": "Hiba történt a modul futtatása közben: {}"
+}

@@ -1,0 +1,10 @@
+{
+    "config_section_missing": "Error: The 'config.ini' file is missing the [commands] section.",
+    "config_read_error": "Error reading the configuration file: {}",
+    "usage": "Usage: python3 main.py <command>",
+    "available_commands": "\nAvailable commands:",
+    "unknown_command": "Error: Unknown command: '{}'",
+    "module_missing_run_function": "Error: The module '{}' does not have a runnable 'run' function.",
+    "import_error": "Error: Failed to import module: '{}'. Check your 'config.ini' and the file path.",
+    "module_run_error": "An error occurred while running the module: {}"
+}
