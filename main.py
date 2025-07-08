@@ -55,7 +55,6 @@ def load_translations(config: configparser.ConfigParser):
             with open(target_lang_path, 'r', encoding='utf-8') as f:
                 specific_translations = json.load(f)
             MESSAGES.update(specific_translations)
-            print(MESSAGES)
         except (FileNotFoundError, json.JSONDecodeError):
             # If the target language file is missing, the English fallback will be used.
             pass
@@ -109,13 +108,17 @@ def resolve_command(
 def execute_command(config: configparser.ConfigParser, command: str, args: List[str]):
     """
     Dynamically loads and runs the module associated with the command.
+    It also expands user and environment variables in the arguments.
     """
+    # Expand OS-specific path variables like '~' or '$HOME'
+    expanded_args = [os.path.expandvars(os.path.expanduser(arg)) for arg in args]
+
     try:
         module_name = config['commands'][command]
         module_to_run = importlib.import_module(module_name)
         
         if hasattr(module_to_run, 'run') and callable(getattr(module_to_run, 'run')):
-            module_to_run.run(args)
+            module_to_run.run(expanded_args)
         else:
             print(MESSAGES.get("module_missing_run_function", "Module '{0}' has no 'run' function.").format(module_name))
             sys.exit(1)
