@@ -3,101 +3,149 @@ import configparser
 import importlib
 import json
 import os
+from typing import List, Dict, Tuple, Optional
 
-def load_translations(lang_code='en'):
+# Global dictionary to hold translation strings.
+MESSAGES: Dict[str, str] = {}
+
+def load_config(path: str = 'config.ini') -> configparser.ConfigParser:
     """
-    Loads translation strings from a JSON file.
+    Reads and returns the content of the configuration file.
+
+    Args:
+        path (str): The path to the configuration file.
+
+    Returns:
+        configparser.ConfigParser: The parsed configuration.
+    """
+    config = configparser.ConfigParser()
+    if not os.path.exists(path):
+        # This error is hardcoded in English as translations are not yet loaded.
+        print(f"Error: Configuration file '{path}' not found.")
+        sys.exit(1)
+    try:
+        config.read(path, encoding='utf-8')
+        return config
+    except configparser.Error as e:
+        # This error is also hardcoded.
+        print(f"Error reading the configuration file: {e}")
+        sys.exit(1)
+
+def load_translations(config: configparser.ConfigParser):
+    """
+    Loads translation strings from a JSON file into the global MESSAGES dictionary.
     It always loads English as a fallback, then overwrites with the selected language.
-    If the specified language file is not found, it defaults to English without an error.
     """
+    global MESSAGES
+    lang_code = config.get('settings', 'language', fallback='en')
     base_path = 'lang'
     fallback_lang_path = os.path.join(base_path, 'en.json')
     
-    # --- 1. Load fallback language (English) ---
     try:
         with open(fallback_lang_path, 'r', encoding='utf-8') as f:
-            translations = json.load(f)
+            MESSAGES = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        # If English is missing, the program cannot function correctly.
+        # Use a hardcoded message if the essential English language file is missing.
         print(f"Critical Error: Fallback language file '{fallback_lang_path}' not found or is invalid.")
         sys.exit(1)
 
-    # --- 2. If the selected language is not the fallback, try to load it ---
     if lang_code != 'en':
         target_lang_path = os.path.join(base_path, f'{lang_code}.json')
         try:
             with open(target_lang_path, 'r', encoding='utf-8') as f:
                 specific_translations = json.load(f)
-            # Update the base (English) translations with the specific language's strings
-            translations.update(specific_translations)
+            MESSAGES.update(specific_translations)
+            print(MESSAGES)
         except (FileNotFoundError, json.JSONDecodeError):
-            # If the target language file is missing or corrupt, just use the English fallback.
-            # No error message is printed, as per the requirement.
+            # If the target language file is missing, the English fallback will be used.
             pass
-            
-    return translations
 
-def main():
+def display_help(config: configparser.ConfigParser):
     """
-    Main entry point for the program.
-    It reads the configuration and the command-line argument,
-    then executes the corresponding module.
+    Displays the usage guide and available commands/aliases.
     """
-    # --- 1. Read configuration file ---
-    config = configparser.ConfigParser()
-    try:
-        config.read('config.ini')
-    except configparser.Error as e:
-        # This initial error cannot be translated as we haven't loaded the language yet.
-        print(f"Error reading the configuration file: {e}")
-        sys.exit(1)
-
-    # --- 2. Load language based on config ---
-    # Defaults to 'en' if the setting is missing.
-    lang_code = config.get('settings', 'language', fallback='en')
-    MESSAGES = load_translations(lang_code)
-
-    if 'commands' not in config:
-        print(MESSAGES["config_section_missing"])
-        sys.exit(1)
-
-    # --- 3. Check command-line arguments ---
-    if len(sys.argv) < 2:
-        print(MESSAGES["usage"])
-        print(MESSAGES["available_commands"])
+    print(MESSAGES.get("usage", "Usage: main.py <command> [arguments]"))
+    print("\n" + MESSAGES.get("available_commands", "Available commands:"))
+    
+    if 'commands' in config:
         for command in config['commands']:
             print(f"- {command}")
-        sys.exit(1)
+            
+    if 'aliases' in config and config['aliases']:
+        print("\n" + MESSAGES.get("available_aliases", "Aliases:"))
+        for alias, command in config['aliases'].items():
+            print(f"- {alias} -> {command}")
 
-    command = sys.argv[1]
+def resolve_command(
+    config: configparser.ConfigParser, 
+    cli_args: List[str]
+) -> Optional[Tuple[str, List[str]]]:
+    """
+    Resolves an alias (if used) and returns the actual command and its arguments.
 
-    # --- 4. Find command in configuration ---
-    if command not in config['commands']:
-        print(MESSAGES["unknown_command"].format(command))
-        print(MESSAGES["available_commands"])
-        for cmd in config['commands']:
-            print(f"- {cmd}")
-        sys.exit(1)
+    Args:
+        config: The parsed configuration.
+        cli_args: The command-line arguments.
 
-    module_name = config['commands'][command]
+    Returns:
+        A tuple of (command, arguments), or None if the command is invalid.
+    """
+    command, *user_args = cli_args
 
-    # --- 5. Dynamically load and run the module ---
+    # Resolve alias if it exists
+    if 'aliases' in config and command in config['aliases']:
+        alias_definition = config['aliases'][command].split()
+        command = alias_definition[0]
+        args = alias_definition[1:] + user_args
+    else:
+        args = user_args
+    
+    # Check if the final command is valid
+    if 'commands' not in config or command not in config['commands']:
+        return None
+        
+    return command, args
+
+def execute_command(config: configparser.ConfigParser, command: str, args: List[str]):
+    """
+    Dynamically loads and runs the module associated with the command.
+    """
     try:
+        module_name = config['commands'][command]
         module_to_run = importlib.import_module(module_name)
+        
         if hasattr(module_to_run, 'run') and callable(getattr(module_to_run, 'run')):
-            # Get any additional arguments from the command line (after the command itself)
-            args = sys.argv[2:]
-            # Execute the module's 'run' function with the arguments
             module_to_run.run(args)
         else:
-            print(MESSAGES["module_missing_run_function"].format(module_name))
+            print(MESSAGES.get("module_missing_run_function", "Module '{0}' has no 'run' function.").format(module_name))
             sys.exit(1)
+            
     except ImportError:
-        print(MESSAGES["import_error"].format(module_name))
+        print(MESSAGES.get("import_error", "Failed to import module '{0}'.").format(module_name))
         sys.exit(1)
     except Exception as e:
-        print(MESSAGES["module_run_error"].format(e))
+        print(MESSAGES.get("module_run_error", "Error running module: {0}").format(e))
         sys.exit(1)
+
+def main():
+    """The main entry point for the application."""
+    config = load_config()
+    load_translations(config)
+
+    if len(sys.argv) < 2:
+        display_help(config)
+        sys.exit(0)
+
+    resolved = resolve_command(config, sys.argv[1:])
+    
+    if resolved is None:
+        original_command = sys.argv[1]
+        print(MESSAGES.get("unknown_command", "Unknown command: {0}").format(original_command))
+        display_help(config)
+        sys.exit(1)
+        
+    command, args = resolved
+    execute_command(config, command, args)
 
 if __name__ == "__main__":
     main()
