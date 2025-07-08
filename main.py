@@ -80,7 +80,8 @@ def resolve_command(
     cli_args: List[str]
 ) -> Optional[Tuple[str, List[str]]]:
     """
-    Resolves an alias (if used) and returns the actual command and its arguments.
+    Resolves an alias (if used) for the command and its parameters,
+    and returns the actual command and its final arguments.
 
     Args:
         config: The parsed configuration.
@@ -90,20 +91,29 @@ def resolve_command(
         A tuple of (command, arguments), or None if the command is invalid.
     """
     command, *user_args = cli_args
+    aliases = config['aliases'] if 'aliases' in config else {}
 
-    # Resolve alias if it exists
-    if 'aliases' in config and command in config['aliases']:
-        alias_definition = config['aliases'][command].split()
+    # Resolve alias for the main command
+    if command in aliases:
+        alias_definition = aliases[command].split()
         command = alias_definition[0]
         args = alias_definition[1:] + user_args
     else:
         args = user_args
     
+    # Resolve aliases for parameters
+    resolved_args = []
+    for arg in args:
+        if arg in aliases:
+            resolved_args.extend(aliases[arg].split())
+        else:
+            resolved_args.append(arg)
+
     # Check if the final command is valid
     if 'commands' not in config or command not in config['commands']:
         return None
         
-    return command, args
+    return command, resolved_args
 
 def execute_command(config: configparser.ConfigParser, command: str, args: List[str]):
     """
