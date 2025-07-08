@@ -85,7 +85,10 @@ def main():
     try:
         module_to_run = importlib.import_module(module_name)
         if hasattr(module_to_run, 'run') and callable(getattr(module_to_run, 'run')):
-            module_to_run.run()
+            # Get any additional arguments from the command line (after the command itself)
+            args = sys.argv[2:]
+            # Execute the module's 'run' function with the arguments
+            module_to_run.run(args)
         else:
             print(MESSAGES["module_missing_run_function"].format(module_name))
             sys.exit(1)
